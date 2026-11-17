@@ -35,3 +35,54 @@ body { margin: 0; background: #f6f8fb; color: #1f2937; }
 .error-text { color: #b42318; }
 .status-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 10px; font-size: 12px; color: var(--muted); }
 .legend-item { background: #eef2f7; border-radius: 999px; padding: 2px 10px; }
+
+/* 趋势预测：页签、特征依据、批次与报告明细 */
+.tab-bar { display: flex; gap: 6px; margin: 4px 0 12px; border-bottom: 1px solid var(--border); }
+.tab { border: 1px solid transparent; border-bottom: none; background: transparent; padding: 8px 14px; cursor: pointer; font-size: 13px; border-radius: 6px 6px 0 0; color: var(--muted); }
+.tab-active { background: #fff; border-color: var(--border); color: var(--brand); font-weight: 600; }
+.tab-count { margin-left: 6px; background: #eef2f7; border-radius: 999px; padding: 0 6px; font-size: 11px; }
+.panel { background: transparent; }
+.panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.panel-head h3 { margin: 0; font-size: 15px; }
+.panel-head h4 { margin: 0; font-size: 14px; }
+.panel-desc { color: var(--muted); font-size: 12px; margin: 4px 0 0; max-width: 720px; }
+.panel-actions { display: flex; gap: 8px; }
+.panel-foot { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.badge { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 12px; border: 1px solid transparent; }
+.badge-ok { background: #e8f6ed; color: #136c34; border-color: #b6e2c5; }
+.badge-warn { background: #fff5e5; color: #8a5300; border-color: #f3d29a; }
+.badge-danger { background: #fdecea; color: #9b1c1c; border-color: #f4bcbc; }
+.badge-muted { background: #eef2f7; color: var(--muted); border-color: var(--border); }
+.row-pending td { background: #fffdf5; }
+.cell-wrap { max-width: 320px; white-space: normal; word-break: break-word; }
+.detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-top: 12px; }
+.detail-card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 12px; }
+.detail-card header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.chip { display: inline-block; background: #eef2f7; border-radius: 4px; padding: 1px 6px; margin: 0 4px 4px 0; font-size: 12px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.chip-info { background: #e8f0fe; color: #1a4fa0; }
+.chip-warn { background: #fff5e5; color: #8a5300; }
+.chip-danger { background: #fdecea; color: #9b1c1c; }
+.change-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.change-item { display: flex; gap: 8px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 12px; }
+.change-body { display: flex; flex-direction: column; gap: 4px; }
+.muted { color: var(--muted); }
+.notice { border-radius: 6px; padding: 8px 12px; font-size: 13px; margin: 8px 0; }
+.notice.ok { background: #e8f6ed; color: #136c34; }
+.notice.warn { background: #fff5e5; color: #8a5300; }
+.form-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 10px; }
+.field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.field.grow { flex: 1; min-width: 220px; }
+.field select, .field input { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+.compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; margin: 10px 0; }
+.compare-card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 12px; }
+.compare-card header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.compare-card p { margin: 3px 0; }
+.conflict-card { background: #fff; border: 1px solid #f3d29a; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.conflict-card h4 { margin: 0 0 4px; font-size: 13px; }
+.conflict-card p { margin: 3px 0; font-size: 12px; }
+.data-table.compact th, .data-table.compact td { padding: 5px 8px; font-size: 12px; }
+.batch-detail { margin-top: 14px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.audit-list { margin: 6px 0 10px; padding-left: 18px; font-size: 12px; color: var(--muted); }
+.warn-list { color: #8a5300; }
+.link:disabled { color: #b6bfcc; cursor: not-allowed; }

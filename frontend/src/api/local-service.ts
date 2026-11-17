@@ -1,6 +1,26 @@
 import { MODULE_BY_KEY } from '@/data/modules'
+import { forecastState, resetForecast } from './forecast-service'
+import { analyzeImpact } from '@/data/forecast-rules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
+
+// 趋势预测的数据面：训练批次生成/发布/作废、模型版本与特征依赖、报告归档都在
+// forecast-service 里完成，统一从这里对外暴露，页面不直接改批次状态。
+export {
+  batchById,
+  batchOptions,
+  createTrainingBatch,
+  diagnoseImpact,
+  discardBatch,
+  forecastState,
+  generateReport,
+  modelViews,
+  policyOptions,
+  publishTrainingBatch,
+  reportById,
+  reportCsvContent,
+  resetForecast,
+} from './forecast-service'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
@@ -57,6 +77,10 @@ export function runAction(key: string, id: number, action: string): ActionResult
 }
 
 export function resetModule(key: string): PageResult {
+  if (key === 'forecast') {
+    resetForecast()
+    return listEntries(key)
+  }
   resetRows(key)
   return listEntries(key)
 }
@@ -84,9 +108,26 @@ export function downloadEntries(key: string): void {
   URL.revokeObjectURL(url)
 }
 
+// 趋势预测已改用模型 / 批次 / 报告领域数据，概览统计直接读它，避免和通用样例表各算一套。
+function forecastOverview() {
+  const state = forecastState()
+  const pending = state.models.filter((model) => {
+    const impact = analyzeImpact(state).find((item) => item.modelId === model.id)
+    return impact?.affected ?? false
+  }).length
+  return {
+    created: state.models.length,
+    pending,
+    abnormal: state.batches.filter((batch) => batch.status === '失败').length,
+  }
+}
+
 export function loadOverview(): OverviewResult {
   const rows = allRows()
   const modules = [...MODULE_BY_KEY.values()].map((meta) => {
+    if (meta.key === 'forecast') {
+      return { name: meta.name, ...forecastOverview() }
+    }
     const entries = rows[meta.key] ?? []
     return {
       name: meta.name,

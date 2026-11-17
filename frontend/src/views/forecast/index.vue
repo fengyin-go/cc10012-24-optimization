@@ -3,11 +3,13 @@
     <header class="page-head">
       <div>
         <h2>趋势预测管理</h2>
-        <p class="page-desc">维护趋势预测模型的输入、执行约束与结果记录，为趋势分析提供可验证的数据工程流程。</p>
+        <p class="page-desc">
+          按特征依赖判断影响范围，只重训受影响模型并生成训练批次；特征依赖与数据集版本一起更新，重训失败保留上一份已生效模型。
+        </p>
       </div>
       <div class="page-actions">
-        <button class="btn primary" type="button" @click="openCreate">登记预测模型</button>
-        <button class="btn" type="button" @click="exportRows">导出趋势预测清单</button>
+        <button class="btn" type="button" @click="exportOverview">导出预测运营清单</button>
+        <button class="btn ghost" type="button" @click="resetAll">恢复示例数据</button>
       </div>
     </header>
 
@@ -18,120 +20,146 @@
       </article>
     </div>
 
-    <p class="status-legend">
-      <span v-for="item in statusSummary" :key="item.status" class="legend-item">
-        {{ item.status }}：{{ item.count }}
-      </span>
-    </p>
+    <nav class="tab-bar">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        type="button"
+        :class="['tab', activeTab === tab.key ? 'tab-active' : '']"
+        @click="activeTab = tab.key"
+      >
+        {{ tab.label }}
+        <span v-if="tab.key === 'batches' && batchCount" class="tab-count">{{ batchCount }}</span>
+      </button>
+    </nav>
 
-    <form class="filter-bar" @submit.prevent="reload">
-      <label v-for="field in filterFields" :key="field" class="filter-item">
-        <span>{{ field }}</span>
-        <input v-model="filters[field]" :placeholder="`按${field}检索`" />
-      </label>
-      <button class="btn" type="submit">查询</button>
-      <button class="btn ghost" type="button" @click="resetFilters">重置条件</button>
-    </form>
+    <p v-if="errorMessage" class="notice warn">{{ errorMessage }}</p>
 
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th v-for="column in columns" :key="column">{{ column }}</th>
-          <th>当前状态</th>
-          <th>可执行动作</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in rows" :key="String(row.id)">
-          <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
-          <td>{{ row.status }}</td>
-          <td class="row-actions">
-            <button
-              v-for="action in actions"
-              :key="action"
-              class="link"
-              type="button"
-              @click="runAction(action, row)"
-            >
-              {{ action }}
-            </button>
-          </td>
-        </tr>
-        <tr v-if="!rows.length">
-          <td :colspan="columns.length + 2" class="empty-state">暂无趋势预测数据，可先登记预测模型</td>
-        </tr>
-      </tbody>
-    </table>
+    <ModelPanel v-if="activeTab === 'models'" @changed="reloadSummary" />
+    <ImpactPanel
+      v-else-if="activeTab === 'impact'"
+      @changed="reloadSummary"
+      @scope-change="onScopeChange"
+    />
+    <BatchPanel
+      v-else-if="activeTab === 'batches'"
+      :change-ids="changeIds"
+      :operator="operator"
+      :focus-batch="focusBatchId"
+      @changed="reloadSummary"
+      @focus-consumed="focusBatchId = ''"
+    />
+    <ReportPanel
+      v-else-if="activeTab === 'reports'"
+      @changed="reloadSummary"
+      @open-batch="openBatch"
+    />
 
     <footer class="page-foot">
-      <span>共 {{ total }} 条趋势预测记录</span>
-      <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
+      <span>
+        批次 {{ batchCount }} 个 · 报告 {{ reportCount }} 份 · 生效批次 {{ summary.activeBatchId ?? '—' }}
+      </span>
+      <span>数据保存在本机浏览器里，换浏览器或清缓存会回到示例数据</span>
     </footer>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
-import {
-  downloadEntries,
-  listEntries,
-  moduleMeta,
-  runAction as applyAction,
-} from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import { downloadCsv } from '@/api/download'
+import { forecastState, resetForecast } from '@/api/local-service'
+import { csvDocument } from '@/data/csv'
+import { useSessionStore } from '@/stores/session'
+import type { ForecastState } from '@/data/forecast-types'
+import BatchPanel from './BatchPanel.vue'
+import ImpactPanel from './ImpactPanel.vue'
+import ModelPanel from './ModelPanel.vue'
+import ReportPanel from './ReportPanel.vue'
 
-const meta = moduleMeta('forecast')
-const columns = ["模型编号", "模型类型", "训练数据集", "目标字段", "特征字段", "预测步长", "置信区间", "评估指标"]
-const actions = ["提交训练", "生效发布", "标记失效"]
-const statuses = ["草稿", "待训练", "已生效", "已失效"]
-const stats = [{"label": "预测模型总数", "value": 0}, {"label": "已生效模型", "value": 0}, {"label": "待训练模型", "value": 0}]
+type TabKey = 'models' | 'impact' | 'batches' | 'reports'
 
-const rows = ref<EntryRow[]>([])
-const total = ref(0)
+const tabs: { key: TabKey; label: string }[] = [
+  { key: 'models', label: '模型与特征' },
+  { key: 'impact', label: '特征影响判断' },
+  { key: 'batches', label: '训练批次' },
+  { key: 'reports', label: '预测报告' },
+]
+
+const session = useSessionStore()
+const operator = session.operator
+const activeTab = ref<TabKey>('models')
+const changeIds = ref<string[]>([])
+/** 从报告明细跳回训练批次时保持可追溯的批次号。 */
+const focusBatchId = ref('')
 const errorMessage = ref('')
-const filters = ref<Record<string, string>>({})
-const filterFields = columns.slice(0, 3)
-const statusSummary = computed(() =>
-  statuses.map((status: string) => ({
-    status,
-    count: rows.value.filter((row) => String(row.status) === status).length,
-  })),
+const summary = ref<ForecastState>(forecastState())
+
+const batchCount = computed(
+  () => summary.value.batches.filter((batch) => batch.status !== '已作废').length,
 )
+const reportCount = computed(() => summary.value.reports.length)
+const stats = computed(() => {
+  const state = summary.value
+  const pending = state.changes.filter((change) => change.status === '待处理').length
+  return [
+    { label: '预测模型', value: state.models.length },
+    { label: '待处理字段变更', value: pending },
+    { label: '训练批次', value: batchCount.value },
+    { label: '已归档报告', value: state.reports.filter((report) => report.status === '已归档').length },
+  ]
+})
 
-function resetFilters() {
-  filters.value = {}
-  reload()
+function reloadSummary() {
+  summary.value = forecastState()
 }
 
-function exportRows() {
-  downloadEntries(meta.key)
+function onScopeChange(next: string[]) {
+  changeIds.value = next
 }
 
-function openCreate() {
-  errorMessage.value = '预测模型登记入口尚未接入审批流'
+function openBatch(batchId: string) {
+  focusBatchId.value = batchId
+  activeTab.value = 'batches'
 }
 
-function runAction(action: string, row: EntryRow) {
+function exportOverview() {
+  const state = forecastState()
+  const rows = state.batches.map((batch) => [
+    batch.id,
+    batch.status,
+    batch.scope,
+    batch.datasetVersions,
+    batch.featureBasis.length,
+    batch.entries
+      .map((entry) => `${entry.modelId} v${entry.fromModelVersion}→v${entry.fromModelVersion + 1}`)
+      .join('、'),
+    batch.status === '已发布' && batch.id === state.activeBatchId ? '当前生效' : '非当前',
+  ])
+  downloadCsv(
+    'forecast-batches.csv',
+    csvDocument(
+      ['批次号', '状态', '范围', '数据集版本', '特征依据条数', '模型版本', '发布状态'],
+      rows,
+    ),
+  )
+}
+
+function resetAll() {
+  resetForecast()
+  changeIds.value = []
+  reloadSummary()
+  errorMessage.value = '已恢复示例数据，请切换页签重新读取'
+}
+
+watch(activeTab, () => {
   errorMessage.value = ''
-  const result = applyAction(meta.key, Number(row.id), action)
-  if (!result.ok) {
-    errorMessage.value = result.message
-    return
-  }
-  reload()
-}
+  reloadSummary()
+})
 
-function reload() {
-  errorMessage.value = ''
-  try {
-    const payload = listEntries(meta.key, filters.value)
-    rows.value = payload.items
-    total.value = payload.total
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '趋势预测列表读取失败'
-  }
-}
-
-onMounted(reload)
+onMounted(() => {
+  const state = forecastState()
+  changeIds.value = state.changes.filter((change) => change.status === '待处理').map((change) => change.id)
+  reloadSummary()
+})
 </script>
